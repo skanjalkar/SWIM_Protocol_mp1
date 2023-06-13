@@ -78,6 +78,9 @@ public:
 	void printAddress(Address *addr);
 	void joinreq(Address* addr, void* data, size_t size);
 	void joinHB(Address* addr, void* data, size_t size);
+	bool updateMemberList(Address* addr, long heartbeat);
+	void logMemberList();
+	void sendRandomHB(Address* addr, long heartbeat);
 	virtual ~MP1Node();
 };
 

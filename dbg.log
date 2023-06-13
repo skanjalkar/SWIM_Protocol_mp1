@@ -83,3 +83,5 @@
  9.0.0.0:0 [4] id, port, hb, timestamp: 08 00 00 02
  9.0.0.0:0 [4] id, port, hb, timestamp: 09 00 00 03
  9.0.0.0:0 [4] RECIEVED DATA FROM at 0
+ 6.0.0.0:0 [100] Node failed at time=100
+ 1.0.0.0:0 [500] @@time=500
