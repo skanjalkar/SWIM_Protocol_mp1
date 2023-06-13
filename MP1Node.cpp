@@ -269,10 +269,18 @@ void MP1Node::sendRandomHB(Address* src_addr, long heartbeat) {
 
     for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++) {
         Address dst_addr = mleAddress(&(*it));
-
+        if ((dst_addr == memberNode->addr) || (dst_addr == *src_addr)) {
+            continue;
+        }
+        double randNum = ((double) (rand()%100)/100);
+        if (randNum < probability) {
+            emulNet->ENsend(&memberNode->addr, &dst_addr, (char *)msg, msgSize);
+        }
+        else {
+            log->LOG(&memberNode->addr, "Probability greater than rand");
+        }
     }
-
-
+    free (msg);
 }
 
 void MP1Node::joinHB(Address *addr, void *data, size_t size)
