@@ -364,6 +364,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
     }
     else if (msg->msgType == PING)
     {
+        // cout << "PINGED!" << endl;
         this->joinHB(src_addr, data, size);
     }
     else if (msg->msgType == JOINREP)
@@ -412,6 +413,17 @@ void MP1Node::nodeLoopOps()
             // log->LOG(&memberNode->addr, ss.str().c_str());
             ss.str("");
 
+            vector<MemberListEntry>::iterator next_it = it;
+            vector<MemberListEntry>::iterator next_next_it = it+1;
+
+            for (next_it = it; next_next_it != memberNode->memberList.end(); next_it++, next_next_it++) {
+                *next_it = *next_next_it;
+            }
+
+            memberNode->memberList.resize(memberNode->memberList.size()-1);
+            it--;
+            this->logMemberList();
+            log->logNodeRemove(&memberNode->addr, &addr);
         }
     }
 
