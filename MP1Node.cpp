@@ -307,6 +307,11 @@ void MP1Node::sendRandomHB(Address *src_addr, long heartbeat)
     free(msg);
 }
 
+void MP1Node::checkHB(Address *addr, void *data, size_t size)
+{
+    return;
+}
+
 void MP1Node::joinHB(Address *addr, void *data, size_t size)
 {
     long *heartbeat = (long *)data;
@@ -347,6 +352,17 @@ bool MP1Node::updateMemberList(Address *addr, long heartbeat)
     return true;
 }
 
+void MP1Node::checkIfAlive(Address *src_addr, void *data, size_t size)
+{
+    // msgtype
+    MessageHdr *msg;
+    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(long) + 1;
+    msg = (MessageHdr *)malloc(msgSize * sizeof(char));
+    msg->msgType = CHECK;
+    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
+    memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
+}
+
 /**
  * FUNCTION NAME: recvCallBack
  *
@@ -385,6 +401,10 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         // cout << "PINGED!" << endl;
         this->joinHB(src_addr, data, size);
     }
+    else if (msg->msgType == SUS)
+    {
+        this->checkIfAlive(src_addr, data, size);
+    }
     else if (msg->msgType == JOINREP)
     {
         /*
@@ -394,7 +414,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         memberNode->inGroup = true;
         stringstream ss;
         ss << "JOINREP from: " << src_addr->getAddress();
-        ss << " msg " << *(long*)(data);
+        ss << " msg " << *(long *)(data);
         // log->LOG(&memberNode->addr, ss.str().c_str());
         this->joinHB(src_addr, data, size);
     }
@@ -431,15 +451,16 @@ void MP1Node::nodeLoopOps()
             // log->LOG(&memberNode->addr, ss.str().c_str());
 
             vector<MemberListEntry>::iterator next_node = it;
-            vector<MemberListEntry>::iterator next_next_node = it+1;
+            vector<MemberListEntry>::iterator next_next_node = it + 1;
             // update pointers
             // maybe can pop also
             // but this works
-            for (next_node = it; next_next_node != memberNode->memberList.end(); next_node++, next_next_node++) {
+            for (next_node = it; next_next_node != memberNode->memberList.end(); next_node++, next_next_node++)
+            {
                 *next_node = *next_next_node;
             }
 
-            memberNode->memberList.resize(memberNode->memberList.size()-1);
+            memberNode->memberList.resize(memberNode->memberList.size() - 1);
             it--;
             // this->logMemberList();
             log->logNodeRemove(&memberNode->addr, &addr);
@@ -486,7 +507,7 @@ Address MP1Node::getJoinAddress()
 void MP1Node::initMemberListTable(Member *memberNode)
 {
     memberNode->memberList.clear();
-    int id = *(int*)(&memberNode->addr.addr);
+    int id = *(int *)(&memberNode->addr.addr);
     short port = *(short *)(&memberNode->addr.addr[4]);
 
     MemberListEntry mle(id, port);

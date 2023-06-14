@@ -32,6 +32,9 @@ enum MsgTypes{
     JOINREQ,
     JOINREP,
 	PING,
+	CHECK,
+	SUS,
+	DIS,
     DUMMYLASTMSGTYPE
 };
 
@@ -81,6 +84,8 @@ public:
 	bool updateMemberList(Address* addr, long heartbeat);
 	void logMemberList();
 	void sendRandomHB(Address* addr, long heartbeat);
+	void checkIfAlive(Address* addr, void* data, size_t size);
+	void checkHB(Address* addr, void* data, size_t size);
 	virtual ~MP1Node();
 };
 
