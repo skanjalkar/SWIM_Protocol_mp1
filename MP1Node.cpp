@@ -358,12 +358,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
             log->LOG(&memberNode->addr, "id, port, hb, timestamp: %02x %02x %02x %02x", recId, recPort, recHeartbeat, recTimestamp);
         }
         log->LOG(&memberNode->addr, "RECIEVED DATA FROM at %d", memberNode->myPos);
-        for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
-        {
-            if (memberNode->addr == mleAddress(&(*it))) {
-                memberNode->myPos = it;
-            }
-        }
+        
     }
     else
     {
