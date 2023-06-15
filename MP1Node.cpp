@@ -272,7 +272,7 @@ void MP1Node::logMemberList()
     log->LOG(&memberNode->addr, ss.str().c_str());
 }
 
-void MP1Node::sendRandomHB(Address *src_addr, long heartbeat)
+void MP1Node::sendRandomHB(long heartbeat)
 {
     // send random heartbeat
     // send random heartbeat to few k members
@@ -290,7 +290,7 @@ void MP1Node::sendRandomHB(Address *src_addr, long heartbeat)
     for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
     {
         Address dst_addr = mleAddress(&(*it));
-        if ((dst_addr == memberNode->addr) || (dst_addr == *src_addr))
+        if ((dst_addr == memberNode->addr))
         {
             continue;
         }
@@ -314,7 +314,7 @@ void MP1Node::pingHeartbeat(Address *addr, void *data, size_t size)
     if (isNewData)
     {
         // this->logMemberList();
-        this->sendRandomHB(addr, *heartbeat);
+        this->sendRandomHB(*heartbeat);
     }
     else
     {
@@ -349,13 +349,13 @@ bool MP1Node::updateMemberList(Address *addr, long heartbeat)
 
 void MP1Node::sendAliveReply(Address *src_addr, void *data, size_t size)
 {
-    MessageHdr* msg;
+    MessageHdr *msg;
     Address *dst_addr = (Address *)(data);
     size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(long) + 1;
     msg = (MessageHdr *)malloc(msgSize * sizeof(char));
     msg->msgType = ISALIVE;
-    memcpy((char *)(msg+1), &memberNode->addr, sizeof(memberNode->addr));
-    memcpy((char *)(msg+1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
+    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
+    memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
     emulNet->ENsend(&memberNode->addr, src_addr, (char *)msg, msgSize);
 }
 
@@ -371,6 +371,15 @@ void MP1Node::checkIfAlive(Address *src_addr, void *data, size_t size)
     emulNet->ENsend(&memberNode->addr, dst_addr, (char *)msg, msgSize);
     this->susTracker.push_back(make_pair(src_addr, dst_addr));
     free(msg);
+}
+
+void MP1Node::sendParticularHB(Address* src_data, void* data, size_t size)
+{
+    MessageHdr* msg;
+    for (auto it = this->susTracker.begin(); it != this->susTracker.end(); it++) {
+
+    }
+
 }
 
 /**
@@ -401,12 +410,11 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
     }
     else if (msg->msgType == CHECK)
     {
-        // yet to implement
         this->sendAliveReply(src_addr, data, size);
     }
     else if (msg->msgType == ISALIVE)
     {
-        // this->sendParticularHB();
+        this->sendParticularHB(src_addr, data, size);
     }
     else if (msg->msgType == JOINREP)
     {
@@ -498,13 +506,13 @@ void MP1Node::nodeLoopOps()
             log->logNodeRemove(&memberNode->addr, &addr);
         }
     }
-    if (par->getcurrtime() % 3 == 0)
+    memberNode->heartbeat++;
+    if (memberNode->heartbeat % 3 == 0)
     {
         this->updateMemberList(&memberNode->addr, memberNode->heartbeat);
 
-        this->sendRandomHB(&memberNode->addr, memberNode->heartbeat);
+        this->sendRandomHB(memberNode->heartbeat);
     }
-    memberNode->heartbeat++;
     return;
 }
 

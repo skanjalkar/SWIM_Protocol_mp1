@@ -85,10 +85,11 @@ public:
 	void pingHeartbeat(Address* addr, void* data, size_t size);
 	bool updateMemberList(Address* addr, long heartbeat);
 	void logMemberList();
-	void sendRandomHB(Address* addr, long heartbeat);
+	void sendRandomHB(long heartbeat);
 	void checkIfAlive(Address* addr, void* data, size_t size);
 	void randomK(Address* dst, int time);
 	void sendAliveReply(Address* addr, void* data, size_t size);
+	void sendParticularHB(Address* src_addr, void* data, size_t size);
 	virtual ~MP1Node();
 };
 
