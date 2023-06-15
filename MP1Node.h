@@ -33,6 +33,7 @@ enum MsgTypes{
     JOINREP,
 	PING,
 	CHECK,
+	ISALIVE,
 	SUS,
 	DIS,
     DUMMYLASTMSGTYPE
@@ -80,12 +81,13 @@ public:
 	void initMemberListTable(Member *memberNode);
 	void printAddress(Address *addr);
 	void joinreq(Address* addr, void* data, size_t size);
-	void joinHB(Address* addr, void* data, size_t size);
+	void pingHeartbeat(Address* addr, void* data, size_t size);
 	bool updateMemberList(Address* addr, long heartbeat);
 	void logMemberList();
 	void sendRandomHB(Address* addr, long heartbeat);
 	void checkIfAlive(Address* addr, void* data, size_t size);
 	void checkHB(Address* addr, void* data, size_t size);
+	void randomK(Address* dst, int time);
 	virtual ~MP1Node();
 };
 
