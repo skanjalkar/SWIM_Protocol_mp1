@@ -351,8 +351,12 @@ void MP1Node::sendAliveReply(Address *src_addr, void *data, size_t size)
 {
     MessageHdr* msg;
     Address *dst_addr = (Address *)(data);
-
-
+    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(long) + 1;
+    msg = (MessageHdr *)malloc(msgSize * sizeof(char));
+    msg->msgType = ISALIVE;
+    memcpy((char *)(msg+1), &memberNode->addr, sizeof(memberNode->addr));
+    memcpy((char *)(msg+1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
+    emulNet->ENsend(&memberNode->addr, src_addr, (char *)msg, msgSize);
 }
 
 void MP1Node::checkIfAlive(Address *src_addr, void *data, size_t size)
