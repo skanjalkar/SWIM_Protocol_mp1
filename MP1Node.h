@@ -60,6 +60,7 @@ private:
 	Params *par;
 	Member *memberNode;
 	char NULLADDR[6];
+	vector<pair<Address*, Address*>> susTracker;
 
 public:
 	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);
@@ -86,8 +87,8 @@ public:
 	void logMemberList();
 	void sendRandomHB(Address* addr, long heartbeat);
 	void checkIfAlive(Address* addr, void* data, size_t size);
-	void checkHB(Address* addr, void* data, size_t size);
 	void randomK(Address* dst, int time);
+	void sendAliveReply(Address* addr, void* data, size_t size);
 	virtual ~MP1Node();
 };
 
