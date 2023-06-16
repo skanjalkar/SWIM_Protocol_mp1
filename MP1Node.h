@@ -60,7 +60,7 @@ private:
 	Params *par;
 	Member *memberNode;
 	char NULLADDR[6];
-	vector<pair<Address*, Address*>> susTracker;
+	vector<pair<Address, Address>> susTracker;
 
 public:
 	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);
@@ -90,7 +90,19 @@ public:
 	void randomK(Address* dst, int time);
 	void sendAliveReply(Address* addr, void* data, size_t size);
 	void sendParticularHB(Address* src_addr, void* data, size_t size);
+	int serializeMLE(char* buffer);
+	int serializeMSG(MessageHdr msgType, char* buffer);
 	virtual ~MP1Node();
+
+	/* Free this after use
+	char* serialize_mle() {
+		// malloc the required size
+	}
+	update_mle(char* data) {
+		//desieralize data into membership
+		// Do thing for each member in the list
+	}
+	*/
 };
 
 #endif /* _MP1NODE_H_ */
