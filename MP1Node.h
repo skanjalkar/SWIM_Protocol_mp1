@@ -60,7 +60,7 @@ private:
 	Params *par;
 	Member *memberNode;
 	char NULLADDR[6];
-	vector<pair<Address*, Address*>> susTracker;
+	vector<pair<Address, Address>> susTracker;
 
 public:
 	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);

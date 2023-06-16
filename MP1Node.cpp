@@ -369,7 +369,8 @@ void MP1Node::checkIfAlive(Address *src_addr, void *data, size_t size)
     msg->msgType = CHECK;
     memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
     emulNet->ENsend(&memberNode->addr, dst_addr, (char *)msg, msgSize);
-    this->susTracker.push_back(make_pair(src_addr, dst_addr));
+    Address data_dest_addr = *dst_addr;
+    this->susTracker.push_back(make_pair(Address(*src_addr), data_dest_addr));
     free(msg);
 }
 
