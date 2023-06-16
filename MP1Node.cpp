@@ -283,12 +283,12 @@ void MP1Node::sendRandomHB(long heartbeat)
     MessageHdr *msg;
     int sizeOfVector = n*sizeof(Address) + n*sizeof(long);
 
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) +  sizeof(int) + sizeOfVector + 1;
+    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) +  sizeof(int) + sizeOfVector;
     msg = (MessageHdr *)malloc(msgSize * sizeof(char));
     msg->msgType = PING;
     memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-    memcpy((char *)(msg + 1) + sizeof(int)+1, &sizeOfVector, sizeof(int));
-    char* replyData = (char *)(msg + 1) + sizeof(int)+1;
+    memcpy((char *)(msg + 1) + sizeof(memberNode->addr), &sizeOfVector, sizeof(int));
+    char* replyData = (char *)(msg + 1) + sizeof(memberNode->addr)+1;
     // memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
     int count = 1;
     for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)

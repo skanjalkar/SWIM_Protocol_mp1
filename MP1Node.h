@@ -90,6 +90,8 @@ public:
 	void randomK(Address* dst, int time);
 	void sendAliveReply(Address* addr, void* data, size_t size);
 	void sendParticularHB(Address* src_addr, void* data, size_t size);
+	int serializeMLE(char* buffer);
+	int serializeMSG(MessageHdr msgType, char* buffer);
 	virtual ~MP1Node();
 
 	/* Free this after use
