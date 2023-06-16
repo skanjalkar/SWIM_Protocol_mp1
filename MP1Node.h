@@ -91,6 +91,16 @@ public:
 	void sendAliveReply(Address* addr, void* data, size_t size);
 	void sendParticularHB(Address* src_addr, void* data, size_t size);
 	virtual ~MP1Node();
+
+	/* Free this after use
+	char* serialize_mle() {
+		// malloc the required size
+	}
+	update_mle(char* data) {
+		//desieralize data into membership
+		// Do thing for each member in the list
+	}
+	*/
 };
 
 #endif /* _MP1NODE_H_ */

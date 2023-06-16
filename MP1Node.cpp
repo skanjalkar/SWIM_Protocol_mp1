@@ -255,8 +255,8 @@ void MP1Node::joinreq(Address *src_addr, void *data, size_t size)
     memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
 
     stringstream ss;
-    ss << "Sending JOINREP To " << src_addr->getAddress() << " with heartbeat: " << memberNode->heartbeat;
-    log->LOG(&memberNode->addr, ss.str().c_str());
+    // ss << "Sending JOINREP To " << src_addr->getAddress() << " with heartbeat: " << memberNode->heartbeat;
+    // log->LOG(&memberNode->addr, ss.str().c_str());
     emulNet->ENsend(&memberNode->addr, src_addr, (char *)msg, msgSize);
     free(msg);
 }
@@ -278,15 +278,19 @@ void MP1Node::sendRandomHB(long heartbeat)
     // send random heartbeat to few k members
     // randomly chosen by k
     int k = 50;
-    double probability = k / (double)memberNode->memberList.size();
+    int n = memberNode->memberList.size();
+    double probability = k / (double)n;
     MessageHdr *msg;
+    int sizeOfVector = n*sizeof(Address) + n*sizeof(long);
 
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(long) + 1;
+    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) +  sizeof(int) + sizeOfVector + 1;
     msg = (MessageHdr *)malloc(msgSize * sizeof(char));
     msg->msgType = PING;
     memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-    memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
-
+    memcpy((char *)(msg + 1) + sizeof(int)+1, &sizeOfVector, sizeof(int));
+    char* replyData = (char *)(msg + 1) + sizeof(int)+1;
+    // memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
+    int count = 1;
     for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
     {
         Address dst_addr = mleAddress(&(*it));
@@ -294,9 +298,16 @@ void MP1Node::sendRandomHB(long heartbeat)
         {
             continue;
         }
-        double randNum = ((double)(rand() % 100) / 100);
-        if (randNum < probability)
-        {
+        memcpy(replyData, &dst_addr, sizeof(Address));
+        replyData += sizeof(Address);
+        memcpy(replyData, &it->heartbeat, sizeof(long));
+        replyData += sizeof(long);
+    }
+
+    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++) {
+        double randNum = ((double)(rand() % 100));
+        Address dst_addr = mleAddress(&(*it));
+        if (randNum < probability) {
             emulNet->ENsend(&memberNode->addr, &dst_addr, (char *)msg, msgSize);
         }
         else
@@ -309,12 +320,12 @@ void MP1Node::sendRandomHB(long heartbeat)
 
 void MP1Node::pingHeartbeat(Address *addr, void *data, size_t size)
 {
-    long *heartbeat = (long *)data;
-    bool isNewData = this->updateMemberList(addr, *heartbeat);
+    long heartbeat = *((long *)data);
+    bool isNewData = this->updateMemberList(addr, heartbeat);
     if (isNewData)
     {
         // this->logMemberList();
-        this->sendRandomHB(*heartbeat);
+        this->sendRandomHB(heartbeat);
     }
     else
     {
@@ -376,11 +387,7 @@ void MP1Node::checkIfAlive(Address *src_addr, void *data, size_t size)
 
 void MP1Node::sendParticularHB(Address* src_data, void* data, size_t size)
 {
-    MessageHdr* msg;
-    for (auto it = this->susTracker.begin(); it != this->susTracker.end(); it++) {
-
-    }
-
+    return;
 }
 
 /**
@@ -440,9 +447,9 @@ void MP1Node::randomK(Address *dst_addr, int time)
     int k = 50;
     double probability = k / (double)memberNode->memberList.size();
     MessageHdr *msg;
-
-    msg->msgType = SUS;
     size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(memberNode->addr) + 1;
+    msg = (MessageHdr *)malloc(msgSize*sizeof(char));
+    msg->msgType = SUS;
     memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
 
     for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
@@ -511,7 +518,6 @@ void MP1Node::nodeLoopOps()
     if (memberNode->heartbeat % 3 == 0)
     {
         this->updateMemberList(&memberNode->addr, memberNode->heartbeat);
-
         this->sendRandomHB(memberNode->heartbeat);
     }
     return;
