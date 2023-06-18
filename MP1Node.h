@@ -28,15 +28,16 @@
 /**
  * Message Types
  */
-enum MsgTypes{
-    JOINREQ,
-    JOINREP,
+enum MsgTypes
+{
+	JOINREQ,
+	JOINREP,
 	PING,
 	CHECK,
 	ISALIVE,
 	SUS,
 	DIS,
-    DUMMYLASTMSGTYPE
+	DUMMYLASTMSGTYPE
 };
 
 /**
@@ -44,27 +45,31 @@ enum MsgTypes{
  *
  * DESCRIPTION: Header and content of a message
  */
-typedef struct MessageHdr {
+typedef struct MessageHdr
+{
 	enum MsgTypes msgType;
-}MessageHdr;
+} MessageHdr;
 
 /**
  * CLASS NAME: MP1Node
  *
  * DESCRIPTION: Class implementing Membership protocol functionalities for failure detection
  */
-class MP1Node {
+class MP1Node
+{
 private:
 	EmulNet *emulNet;
 	Log *log;
 	Params *par;
 	Member *memberNode;
 	char NULLADDR[6];
-	vector<pair<Address, Address>> susTracker;
+	map<Address, vector<Address>> susTracker;
+	vector<MemberListEntry> mySusList;
 
 public:
 	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);
-	Member * getMemberNode() {
+	Member *getMemberNode()
+	{
 		return memberNode;
 	}
 	int recvLoop();
@@ -81,17 +86,16 @@ public:
 	Address getJoinAddress();
 	void initMemberListTable(Member *memberNode);
 	void printAddress(Address *addr);
-	void joinreq(Address* addr, void* data, size_t size);
-	void pingHeartbeat(Address* addr, void* data, size_t size);
-	bool updateMemberList(Address* addr, long heartbeat);
+	void onJoinReq(Address *addr, void *data, size_t size);
+	void onPing(Address *src_addr, void *data, size_t size);
+	void pingHeartbeat(Address *addr, void *data, size_t size);
+	bool updateMemberList(Address *addr, long heartbeat);
 	void logMemberList();
-	void sendRandomHB(long heartbeat);
-	void checkIfAlive(Address* addr, void* data, size_t size);
-	void randomK(Address* dst, int time);
-	void sendAliveReply(Address* addr, void* data, size_t size);
-	void sendParticularHB(Address* src_addr, void* data, size_t size);
-	int serializeMLE(char* buffer);
-	int serializeMSG(MessageHdr msgType, char* buffer);
+	void sendMessageToKRand(MsgTypes msg);
+	void onSus(Address *addr, void *data, size_t size);
+	void serializeVector(char *buffer, vector<MemberListEntry> &src);
+	pair<int, char *> serializeMSG(MsgTypes msgType);
+	vector<MemberListEntry> deserializePing(char *data);
 	virtual ~MP1Node();
 
 	/* Free this after use
