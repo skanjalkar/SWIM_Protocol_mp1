@@ -65,6 +65,7 @@ private:
 	char NULLADDR[6];
 	map<Address, vector<Address>> susTracker;
 	vector<MemberListEntry> mySusList;
+	set<Address> deadNodes;
 
 public:
 	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);
@@ -96,6 +97,7 @@ public:
 	void serializeVector(char *buffer, vector<MemberListEntry> &src);
 	pair<int, char *> serializeMSG(MsgTypes msgType);
 	vector<MemberListEntry> deserializePing(char *data);
+	void removeNode(Address* src_addr, void* data, size_t size);
 	virtual ~MP1Node();
 
 	/* Free this after use

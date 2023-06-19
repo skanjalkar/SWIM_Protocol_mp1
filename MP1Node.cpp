@@ -253,7 +253,7 @@ void MP1Node::onJoinReq(Address *src_addr, void *data, size_t size)
     int replySize = serailizedMsg.first;
     char *replyData = serailizedMsg.second;
 
-    stringstream ss;
+    // stringstream ss;
     // ss << "Sending JOINREP To " << src_addr->getAddress() << " with heartbeat: " << memberNode->heartbeat;
     // log->LOG(&memberNode->addr, ss.str().c_str());
     emulNet->ENsend(&memberNode->addr, src_addr, replyData, replySize);
@@ -337,7 +337,10 @@ pair<int, char *> MP1Node::serializeMSG(MsgTypes msgType)
         msg = (char *)malloc(totalsize * sizeof(char));
         break;
     case DIS:
-        
+        totalsize = headerSize + sizeof(MemberListEntry);
+        msg = (char *)malloc(totalsize * sizeof(char));
+        memcpy(msg+headerSize, &memberNode->memberList.back(), sizeof(MemberListEntry));
+        break;
     }
 
     char *starting = msg;
@@ -370,12 +373,14 @@ void MP1Node::sendMessageToKRand(MsgTypes msg)
     // randomly chosen by k
     int randNum = 50;
     auto replyData = this->serializeMSG(msg);
+
     int replySize = replyData.first;
     char *serilizedData = replyData.second;
-    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
+
+    for (int i = 0; i < memberNode->memberList.size(); ++i)
     {
         int k = rand() % 100;
-        Address dst_addr = mleAddress(&(*it));
+        Address dst_addr = mleAddress(&memberNode->memberList[i]);
         if (k < randNum)
         {
             emulNet->ENsend(&memberNode->addr, &dst_addr, serilizedData, replySize);
@@ -406,10 +411,12 @@ bool MP1Node::updateMemberList(Address *addr, long heartbeat)
             }
         }
     }
-
+    if (this->deadNodes.find(*addr) != this->deadNodes.end()) {
+        return false;
+    }
     MemberListEntry mle(*((int *)addr->addr), *((short *)&(addr->addr[4])), heartbeat, par->getcurrtime());
     memberNode->memberList.push_back(mle);
-    log->logNodeAdd(&memberNode->addr, addr);
+    // log->logNodeAdd(&memberNode->addr, addr);
     return true;
 }
 
@@ -424,6 +431,26 @@ void MP1Node::onSus(Address *src_addr, void *data, size_t size)
         emulNet->ENsend(&memberNode->addr, &sus_addr, dummyMsg.second, dummyMsg.first);
     }
 }
+
+void MP1Node::removeNode(Address* src_addr, void* data, size_t size) {
+    MemberListEntry node;
+    memcpy(&node, data, sizeof(MemberListEntry));
+    Address addr = mleAddress(&node);
+
+    // cout << memberNode->memberList.size() << "IN REMOVE NODE" << endl;
+    for (int i = 0; i < memberNode->memberList.size(); i++) {
+        if (memberNode->memberList[i].id == node.id && memberNode->memberList[i].port == node.port) {
+            swap(memberNode->memberList[i], memberNode->memberList.back());
+            this->sendMessageToKRand(MsgTypes::DIS);
+            memberNode->memberList.pop_back();
+            this->deadNodes.insert(addr);
+            // log->logNodeRemove(&memberNode->addr, &addr);
+            log->LOG(&memberNode->addr, "removed because of DIS msg");
+            break;
+        }
+    }
+}
+
 /**
  * FUNCTION NAME: recvCallBack
  *
@@ -455,6 +482,9 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         auto replyData = this->serializeMSG(MsgTypes::PING);
         this->emulNet->ENsend(&memberNode->addr, src_addr, replyData.second, replyData.first);
     }
+    else  if (msg->msgType == DIS) {
+        this->removeNode(src_addr, data, size);
+    }
     else if (msg->msgType == JOINREP)
     {
         memberNode->inGroup = true;
@@ -482,18 +512,27 @@ void MP1Node::nodeLoopOps()
     /*
      * Your code goes here
      */
+    // if (par->getcurrtime() == 490) {
+    //     this->logMemberList();
+    // }
     int timeout = TREMOVE;
     stringstream ss;
-    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
+    for (int i = 0; i < memberNode->memberList.size(); i++)
     {
-        if (par->getcurrtime() - it->timestamp > timeout)
+        MemberListEntry node = memberNode->memberList[i];
+        if (par->getcurrtime() - node.timestamp > timeout)
         {
-            this->mySusList.push_back(*it);
+            this->mySusList.push_back(node);
         }
 
-        if (par->getcurrtime() - it->timestamp - TFAIL > timeout)
+        if (par->getcurrtime() - node.timestamp - TFAIL > timeout)
         {
-            Address addr = mleAddress(&(*it));
+            Address addr = mleAddress(&node);
+            swap(memberNode->memberList[i], memberNode->memberList[memberNode->memberList.size()-1]);
+            this->sendMessageToKRand(MsgTypes::DIS);
+            this->deadNodes.insert(addr);
+            memberNode->memberList.pop_back();
+            i--;
             // this->logMemberList();
 
             log->logNodeRemove(&memberNode->addr, &addr);
