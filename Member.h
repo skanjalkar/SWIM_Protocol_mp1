@@ -45,13 +45,16 @@ public:
 		memcpy(&addr[0], &id, sizeof(int));
 		memcpy(&addr[4], &port, sizeof(short));
 	}
-	string getAddress()
+	string getAddress() const
 	{
 		int id = 0;
 		short port;
 		memcpy(&id, &addr[0], sizeof(int));
 		memcpy(&port, &addr[4], sizeof(short));
 		return to_string(id) + ":" + to_string(port);
+	}
+	bool operator<(const Address &anotherAddress) const {
+		return this->getAddress() < anotherAddress.getAddress();
 	}
 	void init()
 	{

@@ -151,7 +151,7 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr)
         // create JOINREQ message: format of data is {struct Address myaddr}
         msg->msgType = JOINREQ;
         memcpy((char *)(msg + 1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
-        memcpy((char *)(msg + 1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
+        memcpy((char *)(msg + 1) + sizeof(memberNode->addr.addr) + 1, &memberNode->heartbeat, sizeof(long));
 
 #ifdef DEBUGLOG
         sprintf(s, "Trying to join...");
@@ -244,21 +244,42 @@ Address mleAddress(MemberListEntry *mle)
     return a;
 }
 
-void MP1Node::joinreq(Address *src_addr, void *data, size_t size)
+void MP1Node::onJoinReq(Address *src_addr, void *data, size_t size)
 {
-    MessageHdr *msg;
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(long) + 1;
-    msg = (MessageHdr *)malloc(msgSize * sizeof(char));
-    msg->msgType = JOINREP;
+    long heartbeat = *(long *)data;
+    this->updateMemberList(src_addr, heartbeat);
+    MsgTypes msg = JOINREP;
+    auto serailizedMsg = this->serializeMSG(msg);
+    int replySize = serailizedMsg.first;
+    char *replyData = serailizedMsg.second;
 
-    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-    memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
-
-    stringstream ss;
+    // stringstream ss;
     // ss << "Sending JOINREP To " << src_addr->getAddress() << " with heartbeat: " << memberNode->heartbeat;
     // log->LOG(&memberNode->addr, ss.str().c_str());
-    emulNet->ENsend(&memberNode->addr, src_addr, (char *)msg, msgSize);
-    free(msg);
+    emulNet->ENsend(&memberNode->addr, src_addr, replyData, replySize);
+    free(replyData);
+}
+
+void MP1Node::onPing(Address *src_addr, void *data, size_t size)
+{
+    vector<MemberListEntry> newData = this->deserializePing((char *)data);
+
+    for (int i = 0; i < newData.size(); i++)
+    {
+        Address addr = mleAddress(&newData[i]);
+        auto it = this->susTracker.find(addr);
+        if (it != this->susTracker.end())
+        {
+            for (int j = 0; j < this->susTracker[addr].size(); j++)
+            {
+                auto replyData = this->serializeMSG(MsgTypes::PING);
+                this->emulNet->ENsend(&memberNode->addr, &this->susTracker[addr][j], replyData.second, replyData.first);
+            }
+            this->susTracker[addr].clear();
+            this->susTracker.erase(it);
+        }
+        this->updateMemberList(&addr, newData[i].heartbeat);
+    }
 }
 
 void MP1Node::logMemberList()
@@ -272,65 +293,104 @@ void MP1Node::logMemberList()
     log->LOG(&memberNode->addr, ss.str().c_str());
 }
 
-void MP1Node::sendRandomHB(long heartbeat)
+void MP1Node::serializeVector(char *buffer, vector<MemberListEntry> &src)
+{
+    int n = src.size();
+    memcpy(buffer, &n, sizeof(int));
+    buffer += sizeof(int);
+    for (int i = 0; i < src.size(); i++)
+    {
+        memcpy(buffer, &src[i], sizeof(MemberListEntry));
+        buffer += sizeof(MemberListEntry);
+    }
+}
+
+pair<int, char *> MP1Node::serializeMSG(MsgTypes msgType)
+{
+    char *msg;
+    int headerSize = sizeof(MessageHdr) + sizeof(Address);
+    int totalsize;
+    int n;
+    int sizeOfVector;
+    switch (msgType)
+    {
+    case JOINREQ:
+        assert(false);
+        break;
+    case JOINREP:
+    case PING:
+        n = memberNode->memberList.size();
+        sizeOfVector = n * sizeof(MemberListEntry);
+        totalsize = headerSize + sizeof(int) + sizeOfVector;
+        msg = (char *)malloc(totalsize * sizeof(char));
+        this->serializeVector(msg + headerSize, this->memberNode->memberList);
+        break;
+    case SUS:
+        n = this->mySusList.size();
+        sizeOfVector = n * sizeof(MemberListEntry);
+        totalsize = headerSize + sizeof(int) + sizeOfVector;
+        msg = (char *)malloc(totalsize * sizeof(char));
+        this->serializeVector(msg + headerSize, this->mySusList);
+        break;
+    case ISALIVE:
+        totalsize = headerSize;
+        msg = (char *)malloc(totalsize * sizeof(char));
+        break;
+    case DIS:
+        totalsize = headerSize + sizeof(MemberListEntry);
+        msg = (char *)malloc(totalsize * sizeof(char));
+        memcpy(msg+headerSize, &memberNode->memberList.back(), sizeof(MemberListEntry));
+        break;
+    }
+
+    char *starting = msg;
+    MessageHdr pingType;
+    pingType.msgType = msgType;
+    memcpy(msg, &pingType, sizeof(MessageHdr));
+    msg += sizeof(MessageHdr);
+    memcpy(msg, &memberNode->addr, sizeof(Address));
+    return make_pair(totalsize, starting);
+}
+
+vector<MemberListEntry> MP1Node::deserializePing(char *data)
+{
+    int size;
+    memcpy(&size, data, sizeof(int));
+    data += sizeof(int);
+    vector<MemberListEntry> newData(size);
+    for (int i = 0; i < size; i++)
+    {
+        memcpy(&newData[i], data, sizeof(MemberListEntry));
+        data += sizeof(MemberListEntry);
+    }
+    return newData;
+}
+
+void MP1Node::sendMessageToKRand(MsgTypes msg)
 {
     // send random heartbeat
     // send random heartbeat to few k members
     // randomly chosen by k
-    int k = 50;
-    int n = memberNode->memberList.size();
-    double probability = k / (double)n;
-    MessageHdr *msg;
-    int sizeOfVector = n*sizeof(Address) + n*sizeof(long);
+    int randNum = 50;
+    auto replyData = this->serializeMSG(msg);
 
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) +  sizeof(int) + sizeOfVector;
-    msg = (MessageHdr *)malloc(msgSize * sizeof(char));
-    msg->msgType = PING;
-    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-    memcpy((char *)(msg + 1) + sizeof(memberNode->addr), &sizeOfVector, sizeof(int));
-    char* replyData = (char *)(msg + 1) + sizeof(memberNode->addr)+1;
-    // memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
-    int count = 1;
-    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
+    int replySize = replyData.first;
+    char *serilizedData = replyData.second;
+
+    for (int i = 0; i < memberNode->memberList.size(); ++i)
     {
-        Address dst_addr = mleAddress(&(*it));
-        if ((dst_addr == memberNode->addr))
+        int k = rand() % 100;
+        Address dst_addr = mleAddress(&memberNode->memberList[i]);
+        if (k < randNum)
         {
-            continue;
-        }
-        memcpy(replyData, &dst_addr, sizeof(Address));
-        replyData += sizeof(Address);
-        memcpy(replyData, &it->heartbeat, sizeof(long));
-        replyData += sizeof(long);
-    }
-
-    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++) {
-        double randNum = ((double)(rand() % 100));
-        Address dst_addr = mleAddress(&(*it));
-        if (randNum < probability) {
-            emulNet->ENsend(&memberNode->addr, &dst_addr, (char *)msg, msgSize);
+            emulNet->ENsend(&memberNode->addr, &dst_addr, serilizedData, replySize);
         }
         else
         {
             // log->LOG(&memberNode->addr, "Probability greater than rand");
         }
     }
-    free(msg);
-}
-
-void MP1Node::pingHeartbeat(Address *addr, void *data, size_t size)
-{
-    long heartbeat = *((long *)data);
-    bool isNewData = this->updateMemberList(addr, heartbeat);
-    if (isNewData)
-    {
-        // this->logMemberList();
-        this->sendRandomHB(heartbeat);
-    }
-    else
-    {
-        // log->LOG(&memberNode->addr, "Heartbeat is up to date.");
-    }
+    free(serilizedData);
 }
 
 bool MP1Node::updateMemberList(Address *addr, long heartbeat)
@@ -351,43 +411,44 @@ bool MP1Node::updateMemberList(Address *addr, long heartbeat)
             }
         }
     }
-
+    if (this->deadNodes.find(*addr) != this->deadNodes.end()) {
+        return false;
+    }
     MemberListEntry mle(*((int *)addr->addr), *((short *)&(addr->addr[4])), heartbeat, par->getcurrtime());
     memberNode->memberList.push_back(mle);
-    log->logNodeAdd(&memberNode->addr, addr);
+    // log->logNodeAdd(&memberNode->addr, addr);
     return true;
 }
 
-void MP1Node::sendAliveReply(Address *src_addr, void *data, size_t size)
+void MP1Node::onSus(Address *src_addr, void *data, size_t size)
 {
-    MessageHdr *msg;
-    Address *dst_addr = (Address *)(data);
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(long) + 1;
-    msg = (MessageHdr *)malloc(msgSize * sizeof(char));
-    msg->msgType = ISALIVE;
-    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-    memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &memberNode->heartbeat, sizeof(long));
-    emulNet->ENsend(&memberNode->addr, src_addr, (char *)msg, msgSize);
+    vector<MemberListEntry> incomingSusList = this->deserializePing((char *)data);
+    for (int i = 0; i < incomingSusList.size(); i++)
+    {
+        Address sus_addr = mleAddress(&incomingSusList[i]);
+        auto dummyMsg = this->serializeMSG(MsgTypes::ISALIVE);
+        this->susTracker[sus_addr].push_back(*src_addr);
+        emulNet->ENsend(&memberNode->addr, &sus_addr, dummyMsg.second, dummyMsg.first);
+    }
 }
 
-void MP1Node::checkIfAlive(Address *src_addr, void *data, size_t size)
-{
-    // msgtype
-    MessageHdr *msg;
-    Address *dst_addr = (Address *)(data);
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + 1;
-    msg = (MessageHdr *)malloc(msgSize * sizeof(char));
-    msg->msgType = CHECK;
-    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-    emulNet->ENsend(&memberNode->addr, dst_addr, (char *)msg, msgSize);
-    Address data_dest_addr = *dst_addr;
-    this->susTracker.push_back(make_pair(Address(*src_addr), data_dest_addr));
-    free(msg);
-}
+void MP1Node::removeNode(Address* src_addr, void* data, size_t size) {
+    MemberListEntry node;
+    memcpy(&node, data, sizeof(MemberListEntry));
+    Address addr = mleAddress(&node);
 
-void MP1Node::sendParticularHB(Address* src_data, void* data, size_t size)
-{
-    return;
+    // cout << memberNode->memberList.size() << "IN REMOVE NODE" << endl;
+    for (int i = 0; i < memberNode->memberList.size(); i++) {
+        if (memberNode->memberList[i].id == node.id && memberNode->memberList[i].port == node.port) {
+            swap(memberNode->memberList[i], memberNode->memberList.back());
+            this->sendMessageToKRand(MsgTypes::DIS);
+            memberNode->memberList.pop_back();
+            this->deadNodes.insert(addr);
+            // log->logNodeRemove(&memberNode->addr, &addr);
+            log->LOG(&memberNode->addr, "removed because of DIS msg");
+            break;
+        }
+    }
 }
 
 /**
@@ -402,35 +463,32 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
      */
     MessageHdr *msg = (MessageHdr *)data;
     Address *src_addr = (Address *)(msg + 1);
-    size -= sizeof(MessageHdr) + sizeof(Address) + 1;
-    data += sizeof(MessageHdr) + sizeof(Address) + 1;
+    size -= sizeof(MessageHdr) + sizeof(Address);
+    data += sizeof(MessageHdr) + sizeof(Address);
     if (msg->msgType == JOINREQ)
     {
-        this->joinreq(src_addr, data, size);
+        this->onJoinReq(src_addr, data, size);
     }
     else if (msg->msgType == PING)
     {
-        this->pingHeartbeat(src_addr, data, size);
+        this->onPing(src_addr, data, size);
     }
     else if (msg->msgType == SUS)
     {
-        this->checkIfAlive(src_addr, data, size);
-    }
-    else if (msg->msgType == CHECK)
-    {
-        this->sendAliveReply(src_addr, data, size);
+        this->onSus(src_addr, data, size);
     }
     else if (msg->msgType == ISALIVE)
     {
-        this->sendParticularHB(src_addr, data, size);
+        auto replyData = this->serializeMSG(MsgTypes::PING);
+        this->emulNet->ENsend(&memberNode->addr, src_addr, replyData.second, replyData.first);
+    }
+    else  if (msg->msgType == DIS) {
+        this->removeNode(src_addr, data, size);
     }
     else if (msg->msgType == JOINREP)
     {
         memberNode->inGroup = true;
-        // stringstream ss;
-        // ss << "JOINREP from: " << src_addr->getAddress();
-        // ss << " msg " << *(long *)(data);
-        // log->LOG(&memberNode->addr, ss.str().c_str());
+        this->onPing(src_addr, data, size);
     }
     else
     {
@@ -439,38 +497,6 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
     }
     free(msg);
     return true;
-}
-
-void MP1Node::randomK(Address *dst_addr, int time)
-{
-    // send sus msg to random k nodes
-    int k = 50;
-    double probability = k / (double)memberNode->memberList.size();
-    MessageHdr *msg;
-    size_t msgSize = sizeof(MessageHdr) + sizeof(memberNode->addr) + sizeof(memberNode->addr) + 1;
-    msg = (MessageHdr *)malloc(msgSize*sizeof(char));
-    msg->msgType = SUS;
-    memcpy((char *)(msg + 1), &memberNode->addr, sizeof(memberNode->addr));
-
-    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
-    {
-        Address addr = mleAddress(&(*it));
-        if ((addr == memberNode->addr) || (*dst_addr == addr))
-        {
-            continue;
-        }
-        double randNum = ((double)(rand() % 100) / 100);
-        if (randNum < probability)
-        {
-            memcpy((char *)(msg + 1) + sizeof(memberNode->addr) + 1, &addr, sizeof(memberNode->addr));
-            emulNet->ENsend(&addr, dst_addr, (char *)msg, msgSize);
-        }
-        else
-        {
-            // log->LOG(&memberNode->addr, "Probability greater than rand");
-        }
-    }
-    free(msg);
 }
 
 /**
@@ -486,39 +512,43 @@ void MP1Node::nodeLoopOps()
     /*
      * Your code goes here
      */
+    // if (par->getcurrtime() == 490) {
+    //     this->logMemberList();
+    // }
     int timeout = TREMOVE;
     stringstream ss;
-    for (vector<MemberListEntry>::iterator it = memberNode->memberList.begin(); it != memberNode->memberList.end(); it++)
+    for (int i = 0; i < memberNode->memberList.size(); i++)
     {
-        if (par->getcurrtime() - it->timestamp > timeout)
+        MemberListEntry node = memberNode->memberList[i];
+        if (par->getcurrtime() - node.timestamp > timeout)
         {
-            Address addr = mleAddress(&(*it));
-            ss << "Timing out " << addr.getAddress();
-
-            // log->LOG(&memberNode->addr, ss.str().c_str());
-            this->randomK(&addr, par->getcurrtime());
+            this->mySusList.push_back(node);
         }
-        if (par->getcurrtime() - it->timestamp - TFAIL > timeout)
-        {
-            Address addr = mleAddress(&(*it));
-            vector<MemberListEntry>::iterator next_node = it;
-            vector<MemberListEntry>::iterator next_next_node = it + 1;
-            for (next_node = it; next_next_node != memberNode->memberList.end(); next_node++, next_next_node++)
-            {
-                *next_node = *next_next_node;
-            }
 
-            memberNode->memberList.resize(memberNode->memberList.size() - 1);
-            it--;
+        if (par->getcurrtime() - node.timestamp - TFAIL > timeout)
+        {
+            Address addr = mleAddress(&node);
+            swap(memberNode->memberList[i], memberNode->memberList[memberNode->memberList.size()-1]);
+            this->sendMessageToKRand(MsgTypes::DIS);
+            this->deadNodes.insert(addr);
+            memberNode->memberList.pop_back();
+            i--;
             // this->logMemberList();
+
             log->logNodeRemove(&memberNode->addr, &addr);
         }
     }
+    if (this->mySusList.size() > 0)
+    {
+        this->sendMessageToKRand(MsgTypes::SUS);
+        this->mySusList.clear();
+    }
+
     memberNode->heartbeat++;
     if (memberNode->heartbeat % 3 == 0)
     {
         this->updateMemberList(&memberNode->addr, memberNode->heartbeat);
-        this->sendRandomHB(memberNode->heartbeat);
+        this->sendMessageToKRand(MsgTypes::PING);
     }
     return;
 }
